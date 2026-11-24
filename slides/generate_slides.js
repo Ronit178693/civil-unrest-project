@@ -56,7 +56,8 @@ function caption(slide, text, x, y, w) {
   s.addShape("rect", { x: 0, y: 4.55, w: 13.33, h: 0.06, fill: { color: GOLD } });
   s.addText("Civil Unrest Event Extraction\nand Prediction from Social Media Data", { x: 0.8, y: 2.1, w: 11.7, h: 2.1, fontSize: 38, bold: true, color: "FFFFFF", fontFace: "Calibri", isTextBox: true, margin: 0 });
   s.addText("A fine-tuned transformer extracts unrest events from informal text; event sequences forecast escalation, tested on real GDELT and Mastodon data", { x: 0.8, y: 4.75, w: 11.5, h: 0.7, fontSize: 16, color: "CFE0F0", italics: true, isTextBox: true, margin: 0 });
-  s.addText("Ronit Agrawal  •  Project Instructor: Dr. Pratima Singh  •  Dept. of Computer Science Engineering, Bennett University", { x: 0.8, y: 6.6, w: 11.8, h: 0.4, fontSize: 13, color: "9FB3C8", isTextBox: true, margin: 0 });
+  s.addText("Ronit Agrawal (S24CSEU1323)  •  Simran Soni (S24CSEU1322)  •  Jashanjot Kaur (S24CSEU1335)  •  Anushka Mathur (S24CSEU1319)  •  Shreya Desai (S24CSEU1306)", { x: 0.8, y: 5.75, w: 12.2, h: 0.4, fontSize: 11.5, color: "FFFFFF", isTextBox: true, margin: 0 });
+  s.addText("Project Instructor: Dr. Pratima Singh  •  Dept. of Computer Science Engineering, Bennett University", { x: 0.8, y: 6.6, w: 11.8, h: 0.4, fontSize: 13, color: "9FB3C8", isTextBox: true, margin: 0 });
 }
 
 // 2. Motivation
@@ -269,7 +270,7 @@ function caption(slide, text, x, y, w) {
   s.addShape("rect", { x: 0, y: 0, w: 13.33, h: 7.5, fill: { color: NAVY } });
   s.addText("Thank You", { x: 0.8, y: 2.9, w: 11.7, h: 1.2, fontSize: 44, bold: true, color: "FFFFFF", isTextBox: true, margin: 0 });
   s.addText("Questions & Discussion", { x: 0.8, y: 4.1, w: 11.7, h: 0.6, fontSize: 20, color: "CFE0F0", isTextBox: true, margin: 0 });
-  s.addText("Ronit Agrawal  •  Project Instructor: Dr. Pratima Singh", { x: 0.8, y: 6.7, w: 11, h: 0.4, fontSize: 13, color: "9FB3C8", isTextBox: true, margin: 0 });
+  s.addText("Ronit Agrawal  •  Simran Soni  •  Jashanjot Kaur  •  Anushka Mathur  •  Shreya Desai  |  Instructor: Dr. Pratima Singh", { x: 0.8, y: 6.7, w: 11.8, h: 0.4, fontSize: 13, color: "9FB3C8", isTextBox: true, margin: 0 });
 }
 
 pres.writeFile({ fileName: path.join(__dirname, "civil_unrest_presentation.pptx") }).then(() => {

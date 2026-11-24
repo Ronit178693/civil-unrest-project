@@ -114,7 +114,12 @@ const titleSection = {
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 20 },
-      children: [new TextRun({ text: "Ronit Agrawal  •  [Roll Number]", size: 22 })],
+      children: [new TextRun({ text: "Ronit Agrawal (S24CSEU1323), Simran Soni (S24CSEU1322), Jashanjot Kaur (S24CSEU1335),", size: 20 })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 20 },
+      children: [new TextRun({ text: "Anushka Mathur (S24CSEU1319), Shreya Desai (S24CSEU1306)", size: 20 })],
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
