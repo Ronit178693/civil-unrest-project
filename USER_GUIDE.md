@@ -116,6 +116,7 @@ One row per model, run on two feature sources:
 ```powershell
 .venv\Scripts\python demo.py                                    # guided tour
 .venv\Scripts\python demo.py extract                            # type your own posts
+.venv\Scripts\python demo.py real                               # real data: extraction + forecasting results
 .venv\Scripts\python demo.py forecast data\sample_posts.csv     # forecast from a CSV
 .venv\Scripts\python demo.py forecast data\sample_posts.csv --all   # every day, not just the latest
 ```
@@ -125,7 +126,8 @@ One row per model, run on two feature sources:
 
 Things to know before presenting:
 - On real text the extractor is right about 63% of the time at the exact-span level. Triggers are reliable (F1 0.78); targets, times and crowd sizes are the weak spots.
-- In the sample CSV, Gurugram gets a false alarm on the last day. It built up but never escalated, which is the hardest case. The tour says this explicitly.
+- In the sample CSV, Gurugram builds up but never escalates (the hardest case); the model correctly gives it no alarm, while Jaipur is flagged two days before its onset.
+- `demo.py real` shows the extractor on real held-out posts and headlines next to the hand labels, then the real-data forecasting table.
 
 ---
 
