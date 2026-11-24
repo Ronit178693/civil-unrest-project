@@ -34,8 +34,8 @@ EXAMPLES = [
 
 def show_frame(text, frame):
     print(f"\n  POST:     {text}")
-    for key in ("trigger", "actor", "location", "target", "stage"):
-        print(f"  {key:9s} {frame.get(key) or '-'}")
+    for key in ("trigger", "event_type", "actor", "location", "target", "time", "scale", "stage"):
+        print(f"  {key:10s} {frame.get(key) or '-'}")
 
 
 def cmd_extract(bundle):

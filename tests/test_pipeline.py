@@ -139,3 +139,62 @@ def test_challenge_set_labels_align_with_text():
     assert len(cs) == 24
     labels = [l for s in cs["bio_labels"] for l in json.loads(s)]
     assert {"B-ACTOR", "B-LOCATION", "B-TARGET", "B-TRIGGER"} <= set(labels)
+
+
+# ---------------------------------------------------------------- new roles + real data
+def test_challenge_set_has_time_and_scale_roles():
+    from src.pipeline import load_challenge_set
+    labels = {l for s in load_challenge_set()["bio_labels"] for l in json.loads(s)}
+    assert {"B-TIME", "B-SCALE"} <= labels
+
+
+def test_synthetic_posts_label_time_and_scale():
+    events, _, _, _ = build_dataset(n_episodes=1, seed=3)
+    labels = {l for s in events["bio_labels"] for l in json.loads(s)}
+    assert {"B-TIME", "I-TIME", "B-SCALE"} <= labels
+
+
+def test_event_frame_has_all_roles_and_event_type():
+    from src.extraction.model import bio_to_frame
+    toks = ["Hundreds", "of", "students", "clashed", "in", "Patna", "today"]
+    labs = ["B-SCALE", "O", "B-ACTOR", "B-TRIGGER", "O", "B-LOCATION", "B-TIME"]
+    f = bio_to_frame(toks, labs)
+    assert f["scale"] == "Hundreds" and f["time"] == "today" and f["actor"] == "students"
+    assert f["event_type"] == "CLASH"
+
+
+def test_repair_bio_turns_orphan_inside_tags_into_begin_tags():
+    from src.extraction.transformer_tagger import repair_bio
+    assert repair_bio(["O", "I-ACTOR", "I-ACTOR", "I-TIME"]) == ["O", "B-ACTOR", "I-ACTOR", "B-TIME"]
+
+
+def test_headline_recovered_from_news_url():
+    from src.real_pipeline import headline_from_url
+    url = ("https://economictimes.indiatimes.com/news/india/"
+           "ankita-bhandaris-parents-congress-leaders-detained-during-india-gate-protest/"
+           "articleshow/134955007.cms")
+    assert headline_from_url(url) == \
+        "ankita bhandaris parents congress leaders detained during india gate protest"
+    assert headline_from_url("https://example.com/article/123456") is None
+
+
+def test_multi_onset_windows_skip_hot_days_and_label_each_onset():
+    from src.prediction.aggregate import build_windows_multi
+    view = pd.DataFrame({"region": ["A"] * 4, "day": [1, 2, 9, 10], "stage": ["grievance"] * 4,
+                         "actors": [""] * 4, "targets": [""] * 4,
+                         "has_trigger": [False] * 4, "has_escalation_trigger": [False] * 4})
+    w = build_windows_multi(view, {"A": [5, 12]}, {"A": {5, 6, 12}}, n_days=16).set_index(
+        "window_end_day")
+    assert w.loc[[3, 4, 5], "label"].tolist() == [1, 1, 1]      # onset 5 within 3 days
+    assert w.loc[6, "label"] == 0 and not w.loc[6, "eligible"]  # day 5 (hot) is in the window
+    assert w.loc[10, "label"] == 1 and w.loc[10, "eligible"]    # second onset, calm again
+    assert w.loc[10, "onset_day"] == 12
+
+
+def test_real_annotations_align_with_text():
+    from src.pipeline import load_real_annotated
+    real = load_real_annotated()
+    if real is None:
+        pytest.skip("data/real/annotated_real.json not built yet")
+    assert set(real["split"]) == {"train", "test"}
+    assert set(real["source"]) <= {"mastodon", "gdelt"}

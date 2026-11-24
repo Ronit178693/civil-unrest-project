@@ -209,17 +209,19 @@ class GRUForecaster:
         return np.array([out[pos[i][0], 0, pos[i][1]] for i in df.index])
 
 
-def make_models() -> Dict[str, object]:
-    """Fresh, untrained instances of every model compared in the pipeline."""
+def make_models(base_features=None, volume_features=None) -> Dict[str, object]:
+    """Fresh, untrained instances of every model compared in the pipeline.
+    base_features: per-window features the GRU reads (default: the 9 Stage-1
+    counts); volume_features: what the baseline may use (default: post volume)."""
     return {
         "Volume baseline": TabularModel(
             make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000, class_weight="balanced")),
-            feature_cols=VOLUME_FEATURES),
+            feature_cols=list(volume_features or VOLUME_FEATURES)),
         "Logistic regression": TabularModel(
             make_pipeline(StandardScaler(), LogisticRegression(C=0.5, max_iter=5000,
                                                                class_weight="balanced"))),
         "Gradient boosting": EscalationClassifier(),
-        "GRU": GRUForecaster(),
+        "GRU": GRUForecaster(feature_cols=list(base_features) if base_features else None),
     }
 
 

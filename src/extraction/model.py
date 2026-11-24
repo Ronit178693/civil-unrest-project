@@ -3,20 +3,10 @@ model.py
 ========
 Civil-unrest event extraction model.
 
-Architecture note (see paper, Section 4 "Methodology"):
----------------------------------------------------------
-The project proposal calls for a *fine-tuned transformer-based* event
-extraction module. In this environment there is no network path to
-download pretrained transformer weights (e.g. HuggingFace Hub), so this
-repository ships a fully offline-trainable **linear-chain CRF** over rich
-lexicon + orthographic features as the reference baseline (`UnrestCRFTagger`).
-
-A `TransformerTaggerStub` class below documents exactly how to swap in a
-fine-tuned transformer (e.g. `vinai/bertweet-base` or `xlm-roberta-base`,
-both well-suited to noisy/multilingual social text) once HuggingFace access
-is available -- the rest of the pipeline (aggregation, prediction,
-evaluation) is agnostic to which tagger produced the BIO labels, so the
-swap is a one-file change.
+The main extractor is the fine-tuned transformer in transformer_tagger.py.
+This module holds the shared label set, BIO -> event-frame decoding, span
+scoring, and the linear-chain CRF baseline (`UnrestCRFTagger`) over lexicon
+and orthographic features, which runs fully offline in seconds.
 """
 import json
 from typing import List, Dict, Tuple
@@ -28,8 +18,45 @@ from .features import sentence_to_features
 from .tokenize import tokenize
 
 
-LABELS = ["O", "B-TRIGGER", "I-TRIGGER", "B-ACTOR", "I-ACTOR",
-          "B-LOCATION", "I-LOCATION", "B-TARGET", "I-TARGET"]
+ROLES = ["TRIGGER", "ACTOR", "LOCATION", "TARGET", "TIME", "SCALE"]
+LABELS = ["O"] + [f"{p}-{r}" for r in ROLES for p in ("B", "I")]
+FRAME_KEYS = [r.lower() for r in ROLES]
+
+
+def empty_frame():
+    return {**{k: None for k in FRAME_KEYS}, "event_type": None}
+
+
+def bio_to_frame(tokens, labels):
+    """BIO labels -> event frame {trigger, actor, location, target, time, scale,
+    event_type}. Several spans of one role are joined with '; '. The event
+    type is the lexicon type of the first trigger (PROTEST, STRIKE, CLASH,
+    RIOT, SIT_IN, REPRESSION), or OTHER for a trigger the lexicon lacks."""
+    from .lexicon import FLAT_TRIGGERS
+    frame = empty_frame()
+    cur_tag, cur_tokens = None, []
+
+    def flush():
+        if cur_tag and cur_tokens:
+            key = cur_tag.lower()
+            text = " ".join(cur_tokens)
+            if key in frame:
+                frame[key] = text if frame[key] is None else frame[key] + "; " + text
+
+    for tok, lab in zip(tokens, labels):
+        if lab.startswith("B-"):
+            flush()
+            cur_tag, cur_tokens = lab[2:], [tok]
+        elif lab.startswith("I-") and cur_tag == lab[2:]:
+            cur_tokens.append(tok)
+        else:
+            flush()
+            cur_tag, cur_tokens = None, []
+    flush()
+    if frame["trigger"]:
+        first = frame["trigger"].split(";")[0].strip().lower()
+        frame["event_type"] = FLAT_TRIGGERS.get(first, "OTHER")
+    return frame
 
 
 def _span_set(labels_per_sentence):
@@ -98,8 +125,7 @@ class UnrestCRFTagger:
         token_lists = [tokenize(t) for t in texts]
         non_empty = [i for i, t in enumerate(token_lists) if t]
         preds = self.predict([token_lists[i] for i in non_empty]) if non_empty else []
-        frames = [{"trigger": None, "actor": None, "location": None, "target": None}
-                  for _ in token_lists]
+        frames = [empty_frame() for _ in token_lists]
         for i, labels in zip(non_empty, preds):
             frames[i] = self._bio_to_frame(token_lists[i], labels)
         return frames
@@ -123,39 +149,19 @@ class UnrestCRFTagger:
 
     def extract_events(self, text: str) -> Dict:
         """Run the tagger on a single raw text string and return a
-        structured event frame: {trigger, trigger_type, actor, location,
-        target}. This is the function the real-time pipeline (and the
+        structured event frame: {trigger, actor, location, target, time,
+        scale, event_type}. This is the function the real-time pipeline (and the
         prediction module) calls per-post.
         """
         tokens = tokenize(text)
         if not tokens:
-            return {}
+            return empty_frame()
         labels = self.predict([tokens])[0]
         return self._bio_to_frame(tokens, labels)
 
     @staticmethod
     def _bio_to_frame(tokens, labels) -> Dict:
-        frame = {"trigger": None, "actor": None, "location": None, "target": None}
-        cur_tag, cur_tokens = None, []
-
-        def flush():
-            if cur_tag and cur_tokens:
-                key = cur_tag.lower()
-                text = " ".join(cur_tokens)
-                if key in frame:
-                    frame[key] = text if frame[key] is None else frame[key] + "; " + text
-
-        for tok, lab in zip(tokens, labels):
-            if lab.startswith("B-"):
-                flush()
-                cur_tag, cur_tokens = lab[2:], [tok]
-            elif lab.startswith("I-") and cur_tag == lab[2:]:
-                cur_tokens.append(tok)
-            else:
-                flush()
-                cur_tag, cur_tokens = None, []
-        flush()
-        return frame
+        return bio_to_frame(tokens, labels)
 
     def save(self, path: str):
         import joblib
@@ -168,23 +174,3 @@ class UnrestCRFTagger:
         inst.model = joblib.load(path)
         inst._fitted = True
         return inst
-
-
-class TransformerTaggerStub:
-    """
-    Documentation-only stub showing the upgrade path once HuggingFace model
-    weights are reachable (e.g. in a GPU training environment with internet
-    access). NOT executed by the pipeline; kept here for the paper's
-    reproducibility appendix and for future contributors.
-
-    from transformers import AutoTokenizer, AutoModelForTokenClassification, Trainer, TrainingArguments
-    tokenizer = AutoTokenizer.from_pretrained("vinai/bertweet-base")
-    model = AutoModelForTokenClassification.from_pretrained(
-        "vinai/bertweet-base", num_labels=len(LABELS)
-    )
-    # ... tokenize with is_split_into_words=True, align BIO labels to
-    # wordpieces, then fine-tune with Trainer on the same (tokens, labels)
-    # pairs UnrestCRFTagger.fit() consumes. Decoding and evaluate() keep the
-    # same interface so src/pipeline.py does not need to change.
-    """
-    pass

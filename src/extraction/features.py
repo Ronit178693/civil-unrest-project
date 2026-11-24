@@ -14,7 +14,8 @@ access to model weights is available -- the feature functions here double
 as a sanity-check/ensemble signal even after that upgrade.
 """
 import re
-from .lexicon import GAZETTEER, FLAT_TRIGGERS, ACTOR_HINTS, SCALE_WORDS, HEDGE_WORDS, ESCALATION_WORDS
+from .lexicon import (GAZETTEER, FLAT_TRIGGERS, ACTOR_HINTS, SCALE_WORDS, HEDGE_WORDS,
+                      ESCALATION_WORDS, TIME_WORDS)
 
 WORD_SHAPE_RE = re.compile(r"[A-Za-z]")
 
@@ -54,6 +55,7 @@ def token_features(tokens, i):
         "tok.is_escalation_word": tok_l in ESCALATION_WORDS,
         "tok.is_actor_hint": tok_l in ACTOR_HINTS,
         "tok.is_scale_word": tok_l in SCALE_WORDS,
+        "tok.is_time_word": tok_l in TIME_WORDS,
         "tok.is_hedge": tok_l in HEDGE_WORDS,
         "tok.len": len(tok),
         "tok.suffix3": tok_l[-3:],

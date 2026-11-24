@@ -12,7 +12,8 @@ We have no Twitter/X, Reddit, GDELT or ACLED access yet. The generator
 encodes the same *structure* real unrest data has:
   - informal, noisy, emotionally charged text
   - civil-unrest trigger vocabulary (protest, march, clash, strike, sit-in...)
-  - argument slots: ACTOR, LOCATION, TARGET
+  - argument slots: ACTOR, LOCATION, TARGET, TIME, SCALE (event type comes
+    from the trigger)
   - an escalation process: grievance chatter -> mobilization calls
     -> on-ground reports -> (sometimes) escalation
 
@@ -81,7 +82,17 @@ TARGETS = [
     "water shortage", "land acquisition", "job cuts", "the transport fare hike",
 ]
 
+# Crowd-size phrases. The SCALE span is the phrase without a trailing "of".
 SCALES = ["a few dozen", "hundreds of", "thousands of", "over a thousand", "a small group of"]
+
+# Time expressions by stage: plans point forward, on-ground reports are live,
+# escalation reports look back a little.
+TIMES = {
+    "mobilization": ["tomorrow", "this weekend", "on Monday", "on Friday", "next week", "tonight",
+                     "at 10 am"],
+    "on_ground": ["right now", "since morning", "this evening", "today", "for the third day"],
+    "escalation": ["last night", "this afternoon", "today", "late on Sunday"],
+}
 
 HASHTAG_POOL = ["#protest", "#justice", "#standwithworkers", "#shutdown", "#enough",
                 "#civilrights", "#breakingnews", "#solidarity"]
@@ -96,27 +107,27 @@ TEMPLATES = {
         "so {target} again... {location} deserves better tbh",
     ],
     "mobilization": [
-        "{Actor} are calling for a {trigger} against {target} tomorrow in {location}. {hashtag}",
+        "{Actor} are calling for a {trigger} against {target} {time} in {location}. {hashtag}",
         "BREAKING: {scale} {actor} planning to {trigger} in {location} over {target}.",
-        "Join us! {trigger} planned outside the collectorate in {location} this weekend. {hashtag}",
+        "Join us! {trigger} planned outside the collectorate in {location} {time}. {hashtag}",
         "Organizers confirm a {trigger} will go ahead in {location} despite warnings. {hashtag}",
         "everyone come out!! {trigger} at the main chowk in {location}, {actor} leading it. {hashtag}",
-        "{Actor} announce {trigger} in {location} on Monday, demanding rollback of {target}.",
+        "{Actor} announce {trigger} in {location} {time}, demanding rollback of {target}.",
     ],
     "on_ground": [
-        "Live: {scale} {actor} have gathered for a {trigger} in {location} right now.",
+        "Live: {scale} {actor} have gathered for a {trigger} in {location} {time}.",
         "Reports of a {trigger} near {location} — {actor} demanding action on {target}. {hashtag}",
-        "Situation tense in {location} as {trigger} continues into the evening.",
+        "Situation tense in {location} as {trigger} continues {time}.",
         "Visuals from {location}: {scale} {actor} on the streets over {target}.",
-        "right now in {location}: {actor} holding a {trigger} against {target}, roads blocked",
+        "{time} in {location}: {actor} holding a {trigger} against {target}, roads blocked",
         "{scale} {actor} still at the {trigger} site in {location}. police watching closely. {hashtag}",
     ],
     "escalation": [
         "Police used tear gas as {trigger} in {location} turned into a {escalation_trigger}. {hashtag}",
-        "{scale} {actor} clashed with police in {location}; several {arrest_verb}.",
+        "{scale} {actor} clashed with police in {location} {time}; several {arrest_verb}.",
         "Situation in {location} spiraling: what started as a {trigger} is now a {escalation_trigger}.",
         "Unrest spreading beyond {location} as {actor} intensify {trigger} activity. {hashtag}",
-        "{location} on edge: {escalation_trigger} reported, police use {arrest_verb} on {actor}. {hashtag}",
+        "{location} on edge: {escalation_trigger} reported {time}, police use {arrest_verb} on {actor}. {hashtag}",
         "violent {trigger} between {actor} and police in {location} over {target}",
     ],
 }
@@ -137,13 +148,14 @@ STAGE_TRIGGER_CATEGORIES = {
 # Gold BIO labelling
 # ---------------------------------------------------------------------------
 
-def _bio_tag(text: str, trigger_text: Optional[str], actor: str, location: str, target: str):
+def _bio_tag(text: str, trigger_text: Optional[str], actor: str, location: str, target: str,
+             time: Optional[str] = None, scale: Optional[str] = None):
     """Deterministic gold BIO labels for the synthetic corpus.
 
     Spans are tagged in priority order and never overwrite an earlier tag:
-    the slot trigger, target, location, actor (as ONE span), then every other
-    trigger word from the lexicon that appears in the text (e.g. "tear gas"
-    in an escalation template).
+    the slot trigger, target, location, actor (as ONE span), time, scale,
+    then every other trigger word from the lexicon that appears in the text
+    (e.g. "tear gas" in an escalation template).
     """
     tokens = tokenize(text)
     lower = [t.lower() for t in tokens]
@@ -167,6 +179,10 @@ def _bio_tag(text: str, trigger_text: Optional[str], actor: str, location: str, 
     tag_span(target, "TARGET")
     tag_span(location, "LOCATION")
     tag_span(actor, "ACTOR")
+    if time:
+        tag_span(time, "TIME")
+    if scale:
+        tag_span(scale, "SCALE")
     for phrase in sorted(FLAT_TRIGGERS, key=lambda p: -len(p.split())):  # bigrams first
         tag_span(phrase, "TRIGGER", all_occurrences=True)
 
@@ -224,16 +240,22 @@ def generate_region_timeline(region_id: str, city: str, episode: int, start_date
             template = TEMPLATES[stage][t_idx]
             trig_cat = rng.choice(STAGE_TRIGGER_CATEGORIES[stage])
             trigger_text = rng.choice(TRIGGERS[trig_cat])
+            scale = rng.choice(SCALES)
+            time_phrase = rng.choice(TIMES.get(stage, ["today"]))
 
             text = template.format(
                 target=target, location=city, actor=actor, Actor=actor.capitalize(),
-                trigger=trigger_text, scale=rng.choice(SCALES), hashtag=rng.choice(HASHTAG_POOL),
+                trigger=trigger_text, scale=scale, hashtag=rng.choice(HASHTAG_POOL),
+                time=time_phrase,
                 escalation_trigger=rng.choice(TRIGGERS["riot"]),
                 arrest_verb=rng.choice(TRIGGERS["arrest"]),
             )
             # grievance templates have no {trigger} slot: nothing to tag for it
             slot_trigger = trigger_text if "{trigger}" in template else None
-            tokens, labels = _bio_tag(text, slot_trigger, actor, city, target)
+            slot_time = time_phrase if "{time}" in template else None
+            slot_scale = scale.removesuffix(" of") if "{scale}" in template else None
+            tokens, labels = _bio_tag(text, slot_trigger, actor, city, target,
+                                      slot_time, slot_scale)
             ts = dt.datetime.combine(date, dt.time(rng.randint(0, 23), rng.randint(0, 59)))
             template_id = f"{stage}_{t_idx}"
 
@@ -256,6 +278,8 @@ def generate_region_timeline(region_id: str, city: str, episode: int, start_date
                 "actor": actor,
                 "location": city,
                 "target": target,
+                "time": slot_time,
+                "scale": slot_scale,
                 "tokens": json.dumps(tokens),
                 "bio_labels": json.dumps(labels),
             })

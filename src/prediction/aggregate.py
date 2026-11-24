@@ -100,6 +100,22 @@ def _unique_items(series):
     return len(items)
 
 
+def window_features(w: pd.DataFrame) -> Dict[str, int]:
+    """The 9 base features of one window of posts (a slice of a post view)."""
+    stage_counts = w["stage"].value_counts()
+    return {
+        "n_posts": len(w),
+        "n_grievance": int(stage_counts.get("grievance", 0)),
+        "n_mobilization": int(stage_counts.get("mobilization", 0)),
+        "n_on_ground": int(stage_counts.get("on_ground", 0)),
+        "n_escalation": int(stage_counts.get("escalation", 0)),
+        "unique_actors": _unique_items(w["actors"]),
+        "unique_targets": _unique_items(w["targets"]),
+        "n_trigger_posts": int(w["has_trigger"].sum()),
+        "n_escalation_trigger_posts": int(w["has_escalation_trigger"].sum()),
+    }
+
+
 def build_windows(post_view: pd.DataFrame, region_onset_day: Dict[str, Optional[int]],
                   n_days: int, window_size: int = 3, horizon: int = 3) -> pd.DataFrame:
     """One row per (region, window end day e). With horizon=0 (forecasting
@@ -110,20 +126,11 @@ def build_windows(post_view: pd.DataFrame, region_onset_day: Dict[str, Optional[
         onset = region_onset_day[region]
         for e in range(window_size, n_days - horizon + 1):
             w = reg[(reg["day"] >= e - window_size) & (reg["day"] < e)]
-            stage_counts = w["stage"].value_counts()
             rows.append({
                 "region": region,
                 "window_start_day": e - window_size,
                 "window_end_day": e,
-                "n_posts": len(w),
-                "n_grievance": int(stage_counts.get("grievance", 0)),
-                "n_mobilization": int(stage_counts.get("mobilization", 0)),
-                "n_on_ground": int(stage_counts.get("on_ground", 0)),
-                "n_escalation": int(stage_counts.get("escalation", 0)),
-                "unique_actors": _unique_items(w["actors"]),
-                "unique_targets": _unique_items(w["targets"]),
-                "n_trigger_posts": int(w["has_trigger"].sum()),
-                "n_escalation_trigger_posts": int(w["has_escalation_trigger"].sum()),
+                **window_features(w),
                 "label": int(onset is not None and e <= onset < e + horizon),
                 "eligible": onset is None or e <= onset,
                 "onset_day": onset,
@@ -131,15 +138,53 @@ def build_windows(post_view: pd.DataFrame, region_onset_day: Dict[str, Optional[
     return pd.DataFrame(rows)
 
 
-def add_trend_features(windows_df: pd.DataFrame, lookback: int = 2) -> pd.DataFrame:
+def build_windows_multi(post_view: pd.DataFrame, region_onsets: Dict[str, list],
+                        region_hot_days: Dict[str, set], n_days: int, window_size: int = 3,
+                        horizon: int = 3) -> pd.DataFrame:
+    """Windows for real data, where a region can escalate several times.
+
+    region_onsets:   region -> sorted list of escalation onset days
+    region_hot_days: region -> every day on which the region was in an
+                     escalation (onset days and the active days after them)
+    label     = 1 if an onset falls in [e, e + horizon)
+    eligible  = no hot day inside the window itself, so the model only
+                forecasts NEW escalations from a calm state (an ongoing riot
+                cannot leak into its own forecast)
+    onset_day = the next onset at or after e (for lead-time analysis)
+    """
+    rows = []
+    by_region = {r: g for r, g in post_view.groupby("region")}
+    empty = post_view.iloc[0:0]
+    for region in sorted(region_onsets):
+        reg = by_region.get(region, empty)
+        onsets, hot = region_onsets[region], region_hot_days.get(region, set())
+        for e in range(window_size, n_days - horizon + 1):
+            w = reg[(reg["day"] >= e - window_size) & (reg["day"] < e)]
+            nxt = next((o for o in onsets if o >= e), None)
+            rows.append({
+                "region": region,
+                "window_start_day": e - window_size,
+                "window_end_day": e,
+                **window_features(w),
+                "label": int(nxt is not None and nxt < e + horizon),
+                "eligible": not any(d in hot for d in range(e - window_size, e)),
+                "onset_day": nxt,
+            })
+    return pd.DataFrame(rows)
+
+
+def add_trend_features(windows_df: pd.DataFrame, lookback: int = 2,
+                       base_features=None) -> pd.DataFrame:
     """Per region: change vs the previous window and a rolling mean, so the
     model sees momentum (a rising mobilization count), not only levels."""
     df = windows_df.sort_values(["region", "window_end_day"]).copy()
     g = df.groupby("region")
-    for col in BASE_FEATURES:
+    for col in (base_features or BASE_FEATURES):
         df[f"{col}_delta"] = g[col].diff().fillna(0)
         df[f"{col}_roll{lookback}"] = g[col].transform(
             lambda s: s.rolling(lookback, min_periods=1).mean())
+    if not {"n_posts", "n_mobilization", "n_on_ground", "n_escalation"} <= set(df.columns):
+        return df.reset_index(drop=True)
     posts = df["n_posts"].replace(0, np.nan)
     df["mobilization_ratio"] = (df["n_mobilization"] / posts).fillna(0)
     df["on_ground_ratio"] = (df["n_on_ground"] / posts).fillna(0)
@@ -147,7 +192,8 @@ def add_trend_features(windows_df: pd.DataFrame, lookback: int = 2) -> pd.DataFr
     return df.reset_index(drop=True)
 
 
-NON_FEATURE_COLS = {"region", "window_start_day", "window_end_day", "label", "eligible", "onset_day"}
+NON_FEATURE_COLS = {"region", "window_start_day", "window_end_day", "label", "eligible", "onset_day",
+                    "window_end_date", "region_name", "split"}
 
 
 def feature_columns(df: pd.DataFrame):

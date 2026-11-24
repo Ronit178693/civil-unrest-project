@@ -37,6 +37,12 @@ ACTOR_HINTS = ["students", "farmers", "workers", "unions", "activists",
 SCALE_WORDS = {"dozen", "dozens", "hundreds", "thousand", "thousands",
                "handful", "group", "crowd"}
 
+# Words that typically open or make up a time expression (TIME argument).
+TIME_WORDS = {"today", "tonight", "tomorrow", "yesterday", "now", "morning", "evening",
+              "afternoon", "night", "overnight", "weekend", "week", "month", "monday", "tuesday",
+              "wednesday", "thursday", "friday", "saturday", "sunday", "am", "pm", "hours",
+              "days", "weeks", "since", "last", "next"}
+
 HEDGE_WORDS = {"reportedly", "allegedly", "unconfirmed", "claims", "rumored",
                "rumoured"}  # evasive / moderation-avoidant language signal
 

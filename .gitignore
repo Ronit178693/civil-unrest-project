@@ -8,3 +8,13 @@ results/
 *.log
 .venv/
 venv/
+
+# real-data downloads: caches and the bulk Mastodon dump stay local
+# (re-create with data/real/fetch_*.py). The filtered GDELT table and the
+# small hand-annotated sample are committed.
+data/real/gdelt_cache/
+data/real/mastodon_cache/
+data/real/mastodon_posts.csv
+
+# pretrained transformer weights (downloaded once)
+models_cache/
