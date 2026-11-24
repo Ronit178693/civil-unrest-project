@@ -157,6 +157,12 @@ mostly false (precision ≤ 0.10). Gradient boosting, the best synthetic model,
 raises almost no alarms at the 0.5 threshold on real data. Features from our
 extracted headlines are about as informative as GDELT's own event codes.
 
+*Sensitivity* (`--min-violent 3`, results in `results/real_strict/`): only 24
+severe onsets remain (7 in the test period). Ranking improves (ROC-AUC
+0.72–0.78 on our features) and logistic regression warns before 6 of 7 onsets,
+but the volume baseline has the best average precision (0.24): big escalations
+come with a surge of coverage. With 7 test onsets this is very uncertain.
+
 ## Repository layout
 
 ```

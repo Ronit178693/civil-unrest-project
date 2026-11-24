@@ -198,8 +198,10 @@ def main(argv=None):
     ap.add_argument("--min-articles", type=int, default=60,
                     help="drop states with fewer protest articles in the whole period")
     ap.add_argument("--threshold", type=float, default=0.5)
+    ap.add_argument("--out", default=OUT, help="output directory")
     a = ap.parse_args(argv)
-    os.makedirs(OUT, exist_ok=True)
+    out = a.out
+    os.makedirs(out, exist_ok=True)
     t0 = time.time()
 
     start, end = pd.Timestamp(a.start), pd.Timestamp(a.end)
@@ -244,10 +246,10 @@ def main(argv=None):
 
     table, preds = evaluate_tables({"extracted": (ext, None), "gdelt_coded": (cod, CODED_FEATURES)},
                                    split_day, a.threshold)
-    table.to_csv(os.path.join(OUT, "real_model_comparison.csv"), index=False)
-    preds.to_csv(os.path.join(OUT, "real_test_predictions.csv"), index=False)
-    ext.to_csv(os.path.join(OUT, "real_windows_extracted.csv"), index=False)
-    cod.to_csv(os.path.join(OUT, "real_windows_gdelt_coded.csv"), index=False)
+    table.to_csv(os.path.join(out, "real_model_comparison.csv"), index=False)
+    preds.to_csv(os.path.join(out, "real_test_predictions.csv"), index=False)
+    ext.to_csv(os.path.join(out, "real_windows_extracted.csv"), index=False)
+    cod.to_csv(os.path.join(out, "real_windows_gdelt_coded.csv"), index=False)
 
     stage_dist = pd.Series(list(stages.values())).value_counts().to_dict()
     filled = {k: float(np.mean([bool(f.get(k)) for f in frames.values()]))
@@ -263,7 +265,7 @@ def main(argv=None):
         "headline_stage_distribution": stage_dist, "headline_role_fill_rate": filled,
         "runtime_seconds": round(time.time() - t0, 1),
     }
-    with open(os.path.join(OUT, "real_summary.json"), "w") as f:
+    with open(os.path.join(out, "real_summary.json"), "w") as f:
         json.dump(summary, f, indent=2, default=float)
 
     show = table.drop(columns=["confusion_matrix"]).copy()
@@ -271,7 +273,7 @@ def main(argv=None):
         show[c] = show[c].map(lambda v: f"{v:.3f}" if v is not None and not pd.isna(v) else "-")
     print(f"\nTest period from {a.split} (threshold {a.threshold}):")
     print(show.to_string(index=False))
-    print(f"\n=== DONE in {time.time() - t0:.0f}s. Results in results/real/ ===")
+    print(f"\n=== DONE in {time.time() - t0:.0f}s. Results in {os.path.relpath(out, ROOT)} ===")
 
 
 if __name__ == "__main__":

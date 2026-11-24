@@ -1,8 +1,20 @@
-# Connecting Real Data Sources
+# Data Sources
 
-This repo ships with `generate_synthetic_data.py` so the whole pipeline runs
-offline, deterministically, and without any API keys. For a real deployment
-or for the thesis/paper's final experiments, replace it with:
+## 0. Real data already in this repo
+
+| File | What | How it was made |
+|---|---|---|
+| `real/gdelt_india_protest_events.csv` | 28,362 GDELT protest events (CAMEO 14x) geolocated in India, 1 May-31 Oct 2026 | `python data/real/fetch_gdelt.py` (GDELT 1.0 daily files, no key needed) |
+| `real/gdelt_india_daily_volume.csv` | All GDELT events per Indian state per day | same script |
+| `real/annotated_real.json` | 160 hand-annotated real items (80 Mastodon posts, 80 GDELT headlines), six roles + stage, `split` = train/test | sampled from the two collections, labelled by hand |
+
+`python data/real/fetch_mastodon.py` re-collects the public Mastodon posts
+(only accounts that opted in to search indexing; no usernames stored). The bulk
+dump is not committed. `src/real_pipeline.py` runs the real-data forecasting
+experiment on the GDELT file.
+
+The rest of this file covers sources that need API keys or accounts
+(Twitter/X, Reddit, ACLED) and how to plug them in:
 
 ## 1. Social media collection
 
